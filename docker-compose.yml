@@ -1,0 +1,54 @@
+# version: '3.8'  # Especifica la versión de Docker Compose, en este caso, la 3.8, que incluye soporte para varias características de networking y depende de opciones modernas.
+version: '3.8'
+
+networks:  # Define las redes personalizadas que se crearán para conectar los servicios.
+  notflix_network:  # Nombre de la red personalizada que se creará para conectar los servicios.
+    driver: bridge  # Especifica el controlador de red 'bridge', que crea una red privada interna en el host que conecta los contenedores de los servicios.
+
+services:  # Define los servicios (contenedores) que Docker Compose va a crear y gestionar.
+
+  laravel:  # Nombre del primer servicio, que en este caso es para la aplicación Laravel.
+    image: bitnami/laravel:latest  # Especifica la imagen de Docker a utilizar para el contenedor de Laravel. 'latest' asegura que se descargue la última versión de la imagen.
+    container_name: NotflixDocker  # Define el nombre del contenedor que aparecerá cuando se listan los contenedores Docker.
+    environment:  # Establece variables de entorno necesarias para configurar Laravel en el contenedor.
+      - LARAVEL_DATABASE_HOST=Notflix  # Nombre del host para conectar a la base de datos (nombre del servicio de MariaDB).
+      - LARAVEL_DATABASE_NAME=notflixDB  # Nombre de la base de datos, definido en un archivo `.env`.
+      - LARAVEL_DATABASE_USER=notflix_DB_user  # Usuario de la base de datos, también extraído de `.env`.
+      - LARAVEL_DATABASE_PASSWORD=notflix1221  # Contraseña de la base de datos, obtenida del archivo `.env`.
+    volumes:  # Monta volúmenes para la persistencia de datos.
+      - .:/app  # Mapea el directorio actual del host al directorio `/app` dentro del contenedor, permitiendo que los cambios en los archivos locales se reflejen en el contenedor.
+    depends_on:  # Define la dependencia del contenedor Laravel en el contenedor MariaDB, asegurando que MariaDB se inicie primero.
+      - mariadb
+    networks:
+      - notflix_network  # Nombre de la red personalizada que se creará para conectar los servicios.
+    command: /bin/bash -c "composer install && php artisan serve --host=0.0.0.0 --port=9000"  # Comando que se ejecutará al iniciar el contenedor, instalando las dependencias de Laravel y ejecutando el servidor Laravel.
+
+  nginx:  # Servicio que ejecutará Nginx para servir la aplicación Laravel.
+    image: nginx:alpine  # Imagen ligera de Nginx basada en Alpine Linux.
+    container_name: laravel_nginx  # Nombre del contenedor que aparecerá en la lista de contenedores Docker.
+    ports:  # Configura los puertos del contenedor.
+      - "8000:80"  # Mapea el puerto 8000 del host al puerto 80 en el contenedor, permitiendo el acceso a Laravel en `http://localhost:8000`.
+    volumes:  # Monta volúmenes para conectar archivos necesarios de Nginx y Laravel.
+      - .:/app  # Mapea el directorio actual del host al directorio `/app` dentro del contenedor, permitiendo que Nginx acceda a los archivos de Laravel.
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf  # Mapea el archivo de configuración de Nginx para que el contenedor lo use.
+    depends_on:  # Define que el servicio Nginx depende de Laravel para asegurar que esté activo antes de iniciarse.
+      - laravel
+    networks:
+      - notflix_network  # Conecta el contenedor de Nginx a la red personalizada.
+
+  mariadb:  # Nombre del segundo servicio, que en este caso es para MariaDB, la base de datos.
+    image: bitnami/mariadb:latest  # Especifica la imagen de Docker a utilizar para MariaDB, en este caso, la última versión de la imagen de Bitnami.
+    container_name: mariadb  # Define el nombre del contenedor que aparecerá en la lista de contenedores Docker.
+    environment:  # Variables de entorno necesarias para configurar MariaDB en el contenedor.
+      - MARIADB_ROOT_PASSWORD=root_pass  # Contraseña del usuario root de MariaDB, obtenida de `.env`.
+      - MARIADB_DATABASE=notflixDB # Nombre de la base de datos que se creará al iniciar MariaDB, especificado en `.env`.
+      - MARIADB_USER=notflix_DB_user  # Usuario adicional de MariaDB, también configurado en `.env`.
+      - MARIADB_PASSWORD=notflix1221  # Contraseña del usuario adicional, tomada de `.env`.
+    volumes:  # Monta volúmenes para la persistencia de datos de MariaDB.
+      - mariadb_data:/bitnami/mariadb  # Define un volumen persistente llamado `mariadb_data` que almacena los datos en `/bitnami/mariadb` dentro del contenedor, asegurando que los datos se conserven cuando el contenedor se reinicia.
+    networks: # Conecta el contenedor de MariaDB a la red personalizada.
+      - notflix_network
+
+volumes:  # Define los volúmenes persistentes fuera de los servicios específicos.
+  mariadb_data:  # Crea un volumen de almacenamiento para MariaDB llamado `mariadb_data`, el cual es persistente en el host y asegura que los datos no se pierdan al reiniciar el contenedor.
+    driver: local  # Especifica el controlador de volumen 'local', lo que significa que Docker gestionará este volumen en el sistema de archivos del host.
